@@ -15,6 +15,7 @@ const BIRTH_HOUR_TIMES: Record<string, string> = {
 };
 
 export interface BirthInput {
+  name?: string;
   calendarType: "solar" | "lunar";
   birthYear: number;
   birthMonth: number;
@@ -26,12 +27,15 @@ export interface BirthInput {
 interface Props {
   onSubmit: (input: BirthInput) => void;
   loading?: boolean;
+  requireName?: boolean;
+  submitLabel?: string;
 }
 
-export default function SajuInputForm({ onSubmit, loading }: Props) {
+export default function SajuInputForm({ onSubmit, loading, requireName, submitLabel }: Props) {
   const currentYear = new Date().getFullYear();
 
   const [form, setForm] = useState<BirthInput>({
+    name: "",
     calendarType: "solar",
     birthYear: 1990,
     birthMonth: 1,
@@ -44,8 +48,11 @@ export default function SajuInputForm({ onSubmit, loading }: Props) {
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
+  const nameMissing = requireName && !form.name?.trim();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (nameMissing) return;
     onSubmit(form);
   };
 
@@ -69,6 +76,18 @@ export default function SajuInputForm({ onSubmit, loading }: Props) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* 이름 */}
+      <div>
+        <label style={labelStyle}>이름{requireName ? "" : " (선택)"}</label>
+        <input
+          type="text"
+          value={form.name ?? ""}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="홍길동"
+          style={{ ...selectStyle, width: "100%" }}
+        />
+      </div>
+
       {/* 양력/음력 */}
       <div>
         <label style={labelStyle}>달력 기준</label>
@@ -191,20 +210,23 @@ export default function SajuInputForm({ onSubmit, loading }: Props) {
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={loading || nameMissing}
         style={{
           padding: "14px",
           fontSize: 16,
           fontWeight: 700,
           borderRadius: 12,
           border: "none",
-          cursor: loading ? "default" : "pointer",
-          background: loading ? "#a5b4fc" : "#6366f1",
+          cursor: loading || nameMissing ? "default" : "pointer",
+          background: loading || nameMissing ? "#a5b4fc" : "#6366f1",
           color: "#fff",
         }}
       >
-        {loading ? "분석 중..." : "✨ 자미두수 명반 생성"}
+        {loading ? "분석 중..." : (submitLabel ?? "✨ 자미두수 명반 생성")}
       </button>
+      {nameMissing && (
+        <p style={{ fontSize: 12, color: "#dc2626", textAlign: "center", marginTop: -12 }}>이름을 입력해주세요</p>
+      )}
     </form>
   );
 }

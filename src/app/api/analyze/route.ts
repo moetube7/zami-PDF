@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { AnalyzeRequest, AnalysisResult, AnalysisCard } from "@/core/types";
+import { AnalyzeRequest, AnalysisResult, AnalysisCard, ZhiHour } from "@/core/types";
 import { calculateZamiBoard } from "@/core/calculator";
 import { lunarToSolar, solarToLunar } from "@/core/lunar";
 import { FREE_ANALYSIS_SYSTEM_PROMPT, LOCKED_ANALYSIS_SYSTEM_PROMPT, ZAMI_ADVANTAGES, buildAnalysisUserMessage } from "@/core/prompts";
@@ -26,6 +26,12 @@ export async function POST(req: NextRequest) {
     if (birthYear > new Date().getFullYear()) {
       return NextResponse.json({ error: "미래 날짜는 입력할 수 없어요" }, { status: 400 });
     }
+    if (birthHour === "모름") {
+      return NextResponse.json(
+        { error: "생시가 확정되지 않았습니다. /api/disambiguate로 먼저 명반을 확정해주세요." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     let solarYear = birthYear, solarMonth = birthMonth, solarDay = birthDay;
     if (calendarType === "lunar") {
@@ -36,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     const lunar = solarToLunar({ year: solarYear, month: solarMonth, day: solarDay });
-    const board = calculateZamiBoard(lunar.year, lunar.month, lunar.day, birthHour, gender);
+    const board = calculateZamiBoard(lunar.year, lunar.month, lunar.day, birthHour as ZhiHour, gender);
 
     const systemPrompt = type === "locked" ? LOCKED_ANALYSIS_SYSTEM_PROMPT : FREE_ANALYSIS_SYSTEM_PROMPT;
     const isLockedType = type === "locked";

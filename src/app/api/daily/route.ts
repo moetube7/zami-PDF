@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { DailyRequest, DailyFortune } from "@/core/types";
+import { DailyRequest, DailyFortune, ZhiHour } from "@/core/types";
 import { calculateZamiBoard } from "@/core/calculator";
 import { solarToLunar } from "@/core/lunar";
 import { DAILY_SYSTEM_PROMPT, buildDailyUserMessage } from "@/core/prompts";
@@ -23,9 +23,15 @@ export async function POST(req: NextRequest) {
     if (!birthYear || !birthMonth || !birthDay || !birthHour || !gender || !today) {
       return NextResponse.json({ error: "필수 정보가 누락되었습니다" }, { status: 400, headers: corsHeaders });
     }
+    if (birthHour === "모름") {
+      return NextResponse.json(
+        { error: "생시가 확정되지 않았습니다. /api/disambiguate로 먼저 명반을 확정해주세요." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     const lunar = solarToLunar({ year: birthYear, month: birthMonth, day: birthDay });
-    const board = calculateZamiBoard(lunar.year, lunar.month, lunar.day, birthHour, gender);
+    const board = calculateZamiBoard(lunar.year, lunar.month, lunar.day, birthHour as ZhiHour, gender);
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",

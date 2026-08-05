@@ -17,6 +17,12 @@ export async function POST(req: NextRequest) {
     if (!birthYear || !birthMonth || !birthDay || !birthHour || !calendarType || !gender) {
       return NextResponse.json({ error: "올바른 생년월일을 입력해주세요" }, { status: 400 });
     }
+    if (birthHour === "모름") {
+      return NextResponse.json(
+        { error: "생시가 확정되지 않았습니다. /api/disambiguate로 먼저 명반을 확정해주세요." },
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     let solarYear = birthYear, solarMonth = birthMonth, solarDay = birthDay;
     if (calendarType === "lunar") {

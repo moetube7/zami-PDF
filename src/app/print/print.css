@@ -1,0 +1,169 @@
+@font-face {
+  font-family: "Noto Serif KR";
+  src: url("/fonts/NotoSerifKR-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Variable.ttf") format("truetype-variations");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Noto Serif KR", serif;
+  font-size: 11pt;
+  line-height: 1.9;
+  color: #1a1a1a;
+  /* 루트 레이아웃이 body에 인라인 회색 배경을 지정하므로 !important로 덮어씀 */
+  background: #fff !important;
+}
+
+/* 표지 */
+.cover-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  break-after: page;
+  page-break-after: always;
+}
+
+.cover-eyebrow {
+  font-family: "Noto Sans KR", sans-serif;
+  letter-spacing: 0.3em;
+  color: #6366f1;
+  font-size: 11pt;
+  margin-bottom: 24pt;
+}
+
+.cover-title {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 30pt;
+  font-weight: 900;
+  margin: 0 0 16pt;
+}
+
+.cover-subtitle {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 13pt;
+  color: #444;
+  margin: 0 0 40pt;
+}
+
+.cover-date {
+  font-size: 10pt;
+  color: #888;
+}
+
+/* 목차 */
+.toc-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  break-after: page;
+  page-break-after: always;
+}
+
+.toc-heading {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 20pt;
+  font-weight: 800;
+  margin-bottom: 24pt;
+}
+
+.toc-list {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+
+.toc-item {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 12pt;
+  padding: 6pt 0;
+  border-bottom: 1px dotted #ddd;
+}
+
+/* 챕터 구분(제목) 페이지 */
+.chapter-divider {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  break-after: page;
+  page-break-after: always;
+}
+
+.chapter-divider-title {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 22pt;
+  font-weight: 800;
+  color: #111;
+}
+
+/* 챕터 전용 삽화 페이지 — 삽화가 있을 때만 별도 페이지로 렌더링되어 실제로 분량을 더한다 */
+.chapter-illustration-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  break-after: page;
+  page-break-after: always;
+}
+
+.chapter-illustration-full {
+  max-width: 100%;
+  max-height: 100vh;
+  object-fit: contain;
+}
+
+/* 챕터 본문 */
+.chapter-body {
+  break-after: page;
+  page-break-after: always;
+}
+
+/* 문서 전체의 마지막 챕터에서, 실제로 마지막에 렌더링된 요소(삽화가 있으면 삽화 페이지,
+   없으면 본문)만 트레일링 페이지 나눔을 제거한다 — 삽화 유무를 CSS가 몰라도 항상 맞게 동작 */
+.chapter:last-child > *:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+.chapter-body-title {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 15pt;
+  font-weight: 700;
+  margin: 0 0 20pt;
+  padding-bottom: 8pt;
+  border-bottom: 2px solid #6366f1;
+}
+
+.chapter-body p {
+  margin: 0 0 1em;
+  text-align: justify;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+strong {
+  font-family: "Noto Sans KR", sans-serif;
+  color: #4f46e5;
+}

@@ -1,14 +1,20 @@
-import { ZamiBoard, Palace } from "./types";
+import { ZamiBoard, Palace, ZhiHour } from "./types";
+import { describeStars, describeMinorStars } from "./starMeanings";
 
 // ─────────────────────────────────────────────
 // 상수 정의
 // ─────────────────────────────────────────────
 
+// 12지지 순서 (인덱스와 동일한 순서, 순환 계산에 사용)
+const HOUR_ORDER: ZhiHour[] = [
+  "자", "축", "인", "묘", "진", "사", "오", "미", "신", "유", "술", "해",
+];
+
 // 12지지 시간 → 인덱스 (子=0, 丑=1, ... 亥=11)
-const HOUR_TO_ZHI: Record<string, number> = {
+// "모름"은 의도적으로 포함하지 않음 — calculateZamiBoard는 생시가 확정된 경우에만 호출되어야 함
+const HOUR_TO_ZHI: Record<ZhiHour, number> = {
   "자": 0, "축": 1, "인": 2, "묘": 3, "진": 4, "사": 5,
   "오": 6, "미": 7, "신": 8, "유": 9, "술": 10, "해": 11,
-  "모름": 0,
 };
 
 // 12궁 이름 (명궁부터 지지 증가 방향 CW)
@@ -185,12 +191,18 @@ export function calculateZamiBoard(
   lunarYear: number,
   lunarMonth: number,
   lunarDay: number,
-  birthHour: string,
+  birthHour: ZhiHour,
   gender: "M" | "F"
 ): ZamiBoard {
   void gender;
 
-  const hourZhi     = HOUR_TO_ZHI[birthHour] ?? 0;
+  const hourZhi = HOUR_TO_ZHI[birthHour];
+  if (hourZhi === undefined) {
+    throw new Error(
+      `calculateZamiBoard: 생시가 확정되지 않았습니다 ("${birthHour}"). ` +
+      `"모름"인 경우 /api/disambiguate로 먼저 명반을 확정한 뒤 호출하세요.`
+    );
+  }
   const yearTianGan = getYearTianGan(lunarYear);
   const yearDiZhi   = getYearDiZhi(lunarYear);
 
@@ -272,4 +284,76 @@ export function summarizeBoardForAnalysis(board: ZamiBoard, cardIds: string[]): 
     });
 
   return `명궁: ${board.mingGong}\n오행국: ${board.fiveElementGroup}국\n\n${lines.join("\n")}`;
+}
+
+// 특정 궁 하나를 깊이 다루는 챕터용 요약 — 본궁 + 대궁 + 삼합궁 2개(삼방사정)를 모두 제공하고,
+// 성계 이름에는 표준 의미를 함께 달아준다. 전통 자미두수는 한 궁을 그 궁 하나만으로 읽지 않고
+// 대궁(맞은편)·삼합궁(사방 4칸 떨어진 두 궁)과 함께 "삼방사정"으로 읽는 것이 기본이므로,
+// 이 네 궁의 실제 성계 데이터를 모두 프롬프트에 근거로 제공해 심층 해석이 가능하게 한다.
+export function summarizeBoardForSinglePalace(board: ZamiBoard, palaceName: string): string {
+  const ZHI_NAMES = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+
+  const palace = board.palaces[palaceName];
+  if (!palace) {
+    throw new Error(`summarizeBoardForSinglePalace: 알 수 없는 궁 이름입니다 ("${palaceName}")`);
+  }
+
+  const findByPosition = (pos: number) => Object.values(board.palaces).find((p) => p.position === pos);
+
+  const describe = (p: Palace) => {
+    const major = p.stars.length > 0 ? describeStars(p.stars) : "공궁";
+    const minor = p.minorStars.length > 0 ? ` [소성: ${describeMinorStars(p.minorStars)}]` : "";
+    return `${p.name} — ${major}${minor} (${ZHI_NAMES[p.position]})`;
+  };
+
+  const oppositePalace = findByPosition((palace.position + 6) % 12);
+  const triangleA = findByPosition((palace.position + 4) % 12);
+  const triangleB = findByPosition((palace.position + 8) % 12);
+
+  const lines = [
+    `[본궁] ${describe(palace)}`,
+    oppositePalace ? `[대궁 — 맞은편, 안팎의 대비 관계] ${describe(oppositePalace)}` : null,
+    triangleA ? `[삼합궁 1 — 함께 작용하는 궁] ${describe(triangleA)}` : null,
+    triangleB ? `[삼합궁 2 — 함께 작용하는 궁] ${describe(triangleB)}` : null,
+    `명궁: ${board.mingGong}`,
+    `오행국: ${board.fiveElementGroup}국`,
+  ].filter((line): line is string => line !== null);
+
+  return lines.join("\n");
+}
+
+// ─────────────────────────────────────────────
+// 8. 생시 확정(disambiguation)을 위한 헬퍼
+// ─────────────────────────────────────────────
+
+// 시진을 앞(-1)/뒤(+1)로 순환 이동
+export function getAdjacentHour(hour: ZhiHour, offset: 1 | -1): ZhiHour {
+  const idx = HOUR_ORDER.indexOf(hour);
+  if (idx === -1) throw new Error(`getAdjacentHour: 유효하지 않은 시진입니다 ("${hour}")`);
+  return HOUR_ORDER[(idx + offset + 12) % 12];
+}
+
+// 여러 시진 후보에 대해 한 번에 명반을 계산
+export function computeCandidateBoards(
+  lunarYear: number,
+  lunarMonth: number,
+  lunarDay: number,
+  gender: "M" | "F",
+  hours: ZhiHour[]
+): { hour: ZhiHour; board: ZamiBoard }[] {
+  return hours.map((hour) => ({
+    hour,
+    board: calculateZamiBoard(lunarYear, lunarMonth, lunarDay, hour, gender),
+  }));
+}
+
+// 명궁이 자미로부터 떨어진 상대 거리 r = (명궁지지 - Z) mod 12.
+// placeMajorStars(Z)는 Z값과 무관하게 항상 동일한 상대 오프셋으로 14주성을 배치하므로,
+// r 값은 항상 0~11의 12가지 고정된 명궁 주성 조합(전통 자미두수의 "자미재자/축/.../해" 12격국) 중 하나로 귀결된다.
+export function identifyPalaceArchetype(board: ZamiBoard): number {
+  const ziweiPalace = Object.values(board.palaces).find((p) => p.stars.includes("자미"));
+  if (!ziweiPalace) {
+    throw new Error("identifyPalaceArchetype: 명반에서 자미성 위치를 찾을 수 없습니다");
+  }
+  return ((board.mingGongPosition - ziweiPalace.position) % 12 + 12) % 12;
 }

@@ -19,6 +19,9 @@
 # production
 /build
 
+# generated customer reports (local-only, never committed)
+/output/
+
 # misc
 .DS_Store
 *.pem

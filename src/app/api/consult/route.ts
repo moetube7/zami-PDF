@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
+    if (birthHour === "모름") {
+      return new Response(
+        JSON.stringify({ error: "생시가 확정되지 않았습니다. /api/disambiguate로 먼저 명반을 확정해주세요." }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     let solarYear = birthYear, solarMonth = birthMonth, solarDay = birthDay;
     if (calendarType === "lunar") {

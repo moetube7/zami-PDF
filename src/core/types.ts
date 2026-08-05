@@ -1,3 +1,6 @@
+// 12지지 시진 (생시가 확정된 상태) — "모름"은 포함하지 않음
+export type ZhiHour = "자" | "축" | "인" | "묘" | "진" | "사" | "오" | "미" | "신" | "유" | "술" | "해";
+
 // 사용자 생년월일시 정보
 export interface UserProfile {
   birthYear: number;
@@ -73,14 +76,42 @@ export interface DailyRequest {
   today: string;
 }
 
-// 프리미엄 리포트
-export interface PremiumReport {
-  keySummary?: string;
-  lifeOverview: string;
-  palaceDetails: Record<string, string>;
-  tenYearFortune: string;
-  thisYearFortune: string;
-  advice: string;
+// 프리미엄 리포트 — 챕터 단위 장문 구조
+export type ReportChapterKind =
+  | "overview"
+  | "wuxing"
+  | "palace"
+  | "synthesis"
+  | "decade"
+  | "annual"
+  | "lifestage"
+  | "advice";
+
+export interface ImageAsset {
+  url?: string;
+  base64?: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  altText: string;
+}
+
+export interface ReportChapter {
+  id: string;
+  title: string;
+  kind: ReportChapterKind;
+  bodyMarkdown: string;
+  illustration?: ImageAsset;
+}
+
+export interface ReportDocument {
+  meta: {
+    customerLabel?: string;
+    generatedAt: string;
+    boardSummary: string;
+  };
+  board: ZamiBoard;
+  chapters: ReportChapter[];
 }
 
 // 고민 상담 카테고리
