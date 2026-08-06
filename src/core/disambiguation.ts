@@ -2,6 +2,10 @@
 //
 // 모든 함수는 순수/결정적(랜덤 없음)이며, 서버는 매 요청마다 {birthInput, answers[]}를 받아
 // 동일한 후보/질문 시퀀스를 재계산한다 (기존 코드베이스의 완전 무상태 컨벤션 유지).
+//
+// 핵심 원칙: 선택지는 항상 "실제 후보 시진 1개 = 옵션 1개"로 만든다(뭉뚱그려 합치지 않음).
+// 구별 근거는 주성(원형) → 소성 → 시진 자체 순으로 시도하고, 옵션 수가 한 화면에 너무 많아질
+// 때만 대분류/원형 단계로 먼저 좁힌다. buildDistinguishingOptions()가 이 원칙을 구현한다.
 
 import { ZamiBoard, ZhiHour } from "./types";
 import { identifyPalaceArchetype } from "./calculator";
@@ -40,7 +44,7 @@ function groupByArchetype(candidates: CandidateBoard[]): Map<number, CandidateBo
 }
 
 // ─────────────────────────────────────────────
-// 소성 기반 타이브레이크 (주성 원형이 완전히 겹치는 경우의 2차 판별)
+// 소성 힌트 — 주성이 겹치는 후보를 구별하는 2차 근거
 // ─────────────────────────────────────────────
 
 const MINOR_STAR_HINTS: Record<string, string> = {
@@ -56,58 +60,53 @@ const MINOR_STAR_HINTS: Record<string, string> = {
   "타라": "우회적이고 신중하게 움직이는 편이다",
 };
 
-function minorStarHintText(candidate: CandidateBoard): string | null {
-  const minorStars = candidate.board.palaces["명궁"]?.minorStars ?? [];
-  const hints = minorStars.map((s) => MINOR_STAR_HINTS[s]).filter((h): h is string => !!h);
-  if (hints.length === 0) return null;
-  return hints[0];
-}
-
-function buildTieBreakQuestion(id: string, tied: CandidateBoard[]): DisambiguationQuestion {
-  const options: DisambiguationOption[] = tied.map((c, i) => {
-    const hint = minorStarHintText(c);
-    const text = hint
-      ? `${hint}`
-      : `그 중에서도 "${c.hour}시" 무렵의 특징에 조금 더 가깝다`;
-    return { id: `${id}_opt${i}`, text, targetHours: [c.hour] };
-  });
-  return {
-    id,
-    prompt: "아래 두 가지 모습 중 나와 더 가까운 쪽은?",
-    options,
-  };
-}
-
-// ─────────────────────────────────────────────
-// Case A — 생시가 입력된 경우: 3개 후보(앞/해당/뒤 시진), 질문 최대 1개
-// ─────────────────────────────────────────────
-
-export function buildSingleDisambiguationQuestion(
-  candidates: CandidateBoard[]
-): DisambiguationQuestion | null {
+// 후보 각각에 "1후보 = 1옵션"을 원칙으로 텍스트를 배정한다.
+// 우선순위: (1) 명궁 주성 조합이 후보군 내에서 유일하면 → 원형 설명
+//          (2) 주성이 겹치면 → 그 그룹 안에서 아직 안 쓰인 소성 힌트
+//          (3) 소성도 겹치거나 없으면 → 시진 자체를 근거로 하는 최소한의 구별 문구
+// targetHours가 2개 이상인 옵션은 만들지 않는다 — 항상 후보 수만큼 옵션이 나온다.
+function buildDistinguishingOptions(candidates: CandidateBoard[], idPrefix: string): DisambiguationOption[] {
   const groups = groupByArchetype(candidates);
+  const options: DisambiguationOption[] = [];
+  let idx = 0;
 
-  // 3개 후보가 모두 같은 원형으로 귀결되면 질문으로 구분할 수 없음 — 질문 없이 자동 확정
-  if (groups.size <= 1) return null;
+  for (const [r, group] of groups) {
+    if (group.length === 1) {
+      const archetype = PALACE_ARCHETYPES[r];
+      options.push({
+        id: `${idPrefix}_opt${idx++}`,
+        text: archetype?.description ?? `"${group[0].hour}시" 무렵의 특징에 가깝다`,
+        targetHours: [group[0].hour],
+      });
+      continue;
+    }
 
-  const options: DisambiguationOption[] = Array.from(groups.entries()).map(([r, group], i) => {
-    const archetype = PALACE_ARCHETYPES[r];
-    return {
-      id: `case_a_opt${i}`,
-      text: archetype?.description ?? `"${group.map((g) => g.hour).join("/")}시" 무렵의 특징`,
-      targetHours: group.map((g) => g.hour),
-    };
-  });
+    const used = new Set<string>();
+    const unresolved: CandidateBoard[] = [];
+    for (const c of group) {
+      const minorStars = c.board.palaces["명궁"]?.minorStars ?? [];
+      const hint = minorStars.map((s) => MINOR_STAR_HINTS[s]).find((h): h is string => !!h && !used.has(h));
+      if (hint) {
+        used.add(hint);
+        options.push({ id: `${idPrefix}_opt${idx++}`, text: hint, targetHours: [c.hour] });
+      } else {
+        unresolved.push(c);
+      }
+    }
+    for (const c of unresolved) {
+      options.push({
+        id: `${idPrefix}_opt${idx++}`,
+        text: `그 중에서도 "${c.hour}시" 무렵의 특징에 조금 더 가깝다`,
+        targetHours: [c.hour],
+      });
+    }
+  }
 
-  return {
-    id: "case_a_q1",
-    prompt: "아래 설명 중 평소 본인과 가장 가까운 것을 하나만 골라주세요.",
-    options,
-  };
+  return options;
 }
 
 // ─────────────────────────────────────────────
-// Case B — 생시를 모르는 경우: 최대 12개 후보, 질문 2~3개로 확정
+// 대분류 / 원형별 질문 (옵션 수가 많을 때 먼저 좁히는 용도)
 // ─────────────────────────────────────────────
 
 // 12개 명궁 원형을 4개의 상위 성향군으로 묶는 고정 분류 (1차 초안 — 자미두수 전문 지식 기반 검수 필요)
@@ -125,53 +124,96 @@ const GROUP_INFO: Record<"A" | "B" | "C" | "D", { label: string; text: string }>
   D: { label: "사교형", text: "새로운 사람·경험에 거리낌 없이 먼저 다가간다." },
 };
 
-const MAX_FINE_OPTIONS = 4;
+function buildBroadQuestion(id: string, candidates: CandidateBoard[]): DisambiguationQuestion {
+  const presentGroups = new Set(candidates.map((c) => ARCHETYPE_GROUP[archetypeOf(c)]));
+  const options: DisambiguationOption[] = Array.from(presentGroups).map((g) => ({
+    id: `${id}_${g}`,
+    text: GROUP_INFO[g].text,
+    targetHours: candidates.filter((c) => ARCHETYPE_GROUP[archetypeOf(c)] === g).map((c) => c.hour),
+  }));
+  return { id, prompt: "아래 네 가지 모습 중 나와 가장 가까운 것은?", options };
+}
+
+function buildArchetypeQuestion(id: string, candidates: CandidateBoard[]): DisambiguationQuestion {
+  const groups = groupByArchetype(candidates);
+  const options: DisambiguationOption[] = Array.from(groups.entries()).map(([r, group], i) => {
+    const archetype = PALACE_ARCHETYPES[r];
+    return {
+      id: `${id}_opt${i}`,
+      text: archetype?.description ?? `"${group.map((g) => g.hour).join("/")}시" 무렵의 특징에 가깝다`,
+      targetHours: group.map((g) => g.hour),
+    };
+  });
+  return { id, prompt: "아래 설명 중 평소 본인과 가장 가까운 것을 하나만 골라주세요.", options };
+}
+
+// ─────────────────────────────────────────────
+// 공통 플래너 — 후보 수에 따라 필요한 만큼만 단계를 밟는다
+// ─────────────────────────────────────────────
+
+const MAX_OPTIONS_PER_QUESTION = 4;
+
+function planDisambiguationQuestion(
+  candidates: CandidateBoard[],
+  askedQuestionIds: string[],
+  idPrefix: "case_a" | "case_b"
+): DisambiguationQuestion | null {
+  if (candidates.length <= 1) return null;
+
+  const distinguishId = `${idPrefix}_distinguish`;
+  const broadId = `${idPrefix}_broad`;
+  const archId = `${idPrefix}_arch`;
+
+  const alreadyTriedBroad = askedQuestionIds.includes(broadId);
+  const alreadyTriedArch = askedQuestionIds.includes(archId);
+  // 대분류·원형 단계를 이미 다 거쳤다면 더 쪼갤 방법이 없으므로, 옵션 수가 많아도 최종 구별로 확정한다
+  const exhaustedCoarseTiers = alreadyTriedBroad && alreadyTriedArch;
+
+  // 1단계: 지금 바로 다 구별해도 옵션이 기준 이내면(또는 더 쪼갤 방법이 없으면) 그대로 질문
+  if (!askedQuestionIds.includes(distinguishId)) {
+    const fullOptions = buildDistinguishingOptions(candidates, distinguishId);
+    if (fullOptions.length <= MAX_OPTIONS_PER_QUESTION || exhaustedCoarseTiers) {
+      return {
+        id: distinguishId,
+        prompt: "아래 설명 중 평소 본인과 가장 가까운 것을 하나만 골라주세요.",
+        options: fullOptions,
+      };
+    }
+  }
+
+  // 2단계: 후보가 여러 대분류에 걸쳐 있으면 대분류 질문으로 먼저 좁힌다
+  if (!alreadyTriedBroad) {
+    const presentGroups = new Set(candidates.map((c) => ARCHETYPE_GROUP[archetypeOf(c)]));
+    if (presentGroups.size > 1) return buildBroadQuestion(broadId, candidates);
+  }
+
+  // 3단계: 하나의 대분류로 좁혀졌지만 아직 명궁 원형이 여럿이면 원형별 질문
+  if (!alreadyTriedArch) {
+    const archGroups = groupByArchetype(candidates);
+    if (archGroups.size > 1) return buildArchetypeQuestion(archId, candidates);
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────
+// Case A — 생시가 입력된 경우: 3개 후보(앞/해당/뒤 시진)
+// ─────────────────────────────────────────────
+
+// 후보가 항상 최대 3개이므로 1단계(전체 구별)에서 언제나 끝난다 — 질문은 항상 정확히 1개.
+export function buildSingleDisambiguationQuestion(candidates: CandidateBoard[]): DisambiguationQuestion | null {
+  return planDisambiguationQuestion(candidates, [], "case_a");
+}
+
+// ─────────────────────────────────────────────
+// Case B — 생시를 모르는 경우: 최대 12개 후보
+// ─────────────────────────────────────────────
 
 export function nextDisambiguationQuestion(
   candidates: CandidateBoard[],
   askedQuestionIds: string[] = []
 ): DisambiguationQuestion | null {
-  if (candidates.length <= 1) return null;
-
-  const groups = groupByArchetype(candidates);
-
-  // 남은 후보가 전부 같은 원형(주성 조합)으로 귀결됨 → 주성만으로는 구분 불가, 소성 타이브레이크로 전환
-  if (groups.size === 1) {
-    if (askedQuestionIds.includes("case_b_tiebreak")) return null; // 이미 물어봤다면 더 이상 구분 불가
-    return buildTieBreakQuestion("case_b_tiebreak", candidates);
-  }
-
-  // 남은 후보의 원형 종류가 많으면(강제선택 4개 초과) 대분류 질문으로 먼저 좁힌다
-  if (groups.size > MAX_FINE_OPTIONS && !askedQuestionIds.includes("case_b_broad")) {
-    const presentGroups = new Set(Array.from(groups.keys()).map((r) => ARCHETYPE_GROUP[r]));
-    const options: DisambiguationOption[] = Array.from(presentGroups).map((g) => {
-      const hours = candidates
-        .filter((c) => ARCHETYPE_GROUP[archetypeOf(c)] === g)
-        .map((c) => c.hour);
-      return { id: `case_b_broad_${g}`, text: GROUP_INFO[g].text, targetHours: hours };
-    });
-    return {
-      id: "case_b_broad",
-      prompt: "아래 네 가지 모습 중 나와 가장 가까운 것은?",
-      options,
-    };
-  }
-
-  // 원형 종류가 4개 이하로 좁혀졌으면 원형 설명으로 세분류 질문
-  const options: DisambiguationOption[] = Array.from(groups.entries()).map(([r, group], i) => {
-    const archetype = PALACE_ARCHETYPES[r];
-    return {
-      id: `case_b_fine_opt${i}`,
-      text: archetype?.description ?? `"${group.map((g) => g.hour).join("/")}시" 무렵의 특징`,
-      targetHours: group.map((g) => g.hour),
-    };
-  });
-
-  return {
-    id: "case_b_fine",
-    prompt: "아래 설명 중 평소 본인과 가장 가까운 것을 하나만 골라주세요.",
-    options,
-  };
+  return planDisambiguationQuestion(candidates, askedQuestionIds, "case_b");
 }
 
 // ─────────────────────────────────────────────
@@ -217,7 +259,7 @@ export function resolveBestCandidate(
 
   if (remaining.length === 1) return remaining[0];
 
-  // 질문을 다 거치고도 후보가 남으면(설계상 드묾) 자기보고 앵커(원래 입력한 시진) 우선, 없으면 첫 번째
+  // 질문을 다 거치고도 후보가 남으면(설계상 거의 없음) 자기보고 앵커(원래 입력한 시진) 우선, 없으면 첫 번째
   const anchored = anchorHour ? remaining.find((c) => c.hour === anchorHour) : undefined;
   return anchored ?? remaining[0] ?? candidates[0];
 }
