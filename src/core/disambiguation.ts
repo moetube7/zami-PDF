@@ -119,10 +119,10 @@ const ARCHETYPE_GROUP: Record<number, "A" | "B" | "C" | "D"> = {
 };
 
 const GROUP_INFO: Record<"A" | "B" | "C" | "D", { label: string; text: string }> = {
-  A: { label: "주도형", text: "나는 상황을 주도하고 이끄는 쪽에 훨씬 가깝다. 결정이 필요할 때 앞장서는 게 편하다." },
-  B: { label: "온화형", text: "갈등보다 안정과 편안함을 지키는 쪽이 편하고, 원칙을 지키며 주변을 챙기는 편이다." },
-  C: { label: "감성형", text: "겉으로 드러내기보다 마음속으로 섬세하게 헤아리는 편이고, 상황에 따라 유연하게 반응한다." },
-  D: { label: "사교형", text: "사람들과 어울리고 새로운 관계·경험을 만드는 데 거리낌이 없다." },
+  A: { label: "주도형", text: "결정이 필요하면 내가 먼저 나서서 이끈다." },
+  B: { label: "온화형", text: "갈등보다 평화를 택하고, 원칙 지키며 주변을 챙긴다." },
+  C: { label: "감성형", text: "겉보다 마음으로 헤아리고, 상황 따라 유연하게 움직인다." },
+  D: { label: "사교형", text: "새로운 사람·경험에 거리낌 없이 먼저 다가간다." },
 };
 
 const MAX_FINE_OPTIONS = 4;
